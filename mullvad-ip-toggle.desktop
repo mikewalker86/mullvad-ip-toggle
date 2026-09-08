@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Mullvad IP Toggle
+Comment=Alterna automaticamente a localização/IP da Mullvad VPN
+Exec=x-terminal-emulator -e "__EXEC_PATH__"
+Icon=network-vpn
+Terminal=false
+Categories=Network;
