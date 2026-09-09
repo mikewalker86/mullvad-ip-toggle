@@ -1,90 +1,90 @@
 # Mullvad IP Toggle
 
-Script de linha de comandos para Linux que alterna automaticamente a
-localização/IP da tua ligação [Mullvad VPN](https://mullvad.net/), a
-intervalos regulares e de forma configurável.
+A command-line script for Linux that automatically rotates the
+location/IP of your [Mullvad VPN](https://mullvad.net/) connection, at
+configurable intervals.
 
-## Funcionalidades
+## Features
 
-- Alterna entre servidores da **União Europeia**, **Estados Unidos** (por
-  cidade) ou **Brasil** — as regiões podem ser combinadas no mesmo pool.
-- Intervalo de rotação configurável: 25s, 35s, 45s, 60s ou 120s.
-- Guarda a última configuração escolhida e permite reutilizá-la.
-- Reconexão "inteligente": aguarda o handshake real da VPN em vez de um
-  tempo de espera fixo, minimizando o tempo de instabilidade da ligação.
-- Nova tentativa automática de reconexão se o handshake falhar.
-- Verificação opcional do IP público real a cada rotação (requer `curl`).
-- Notificação desktop a cada troca de localização (requer `notify-send`).
-- Cronómetro decrescente visível até à próxima rotação.
-- Nomes completos de país/cidade (em vez de siglas).
-- Título da janela do terminal atualizado com a localização atual.
-- Controlo por teclado durante a execução:
-  - `q` — para o programa e restaura a configuração da Mullvad
-  - `a` — avança já para a próxima rotação, sem esperar o resto do tempo
-- Regista cada rotação num ficheiro de log (`~/mullvad_ip_toggle.log`).
+- Rotates between **European Union**, **United States** (by city), or
+  **Brazil** servers — regions can be combined into the same pool.
+- Configurable rotation interval: 25s, 35s, 45s, 60s, or 120s.
+- Saves your last configuration and offers to reuse it.
+- "Smart" reconnection: waits for the real VPN handshake instead of a
+  fixed delay, minimizing connection downtime.
+- Automatic retry if the handshake fails.
+- Optional public IP check on every rotation (requires `curl`).
+- Desktop notification on every location change (requires `notify-send`).
+- Visible countdown timer until the next rotation.
+- Full country/city names (instead of raw codes).
+- Updates the terminal window title with the current location.
+- Keyboard controls while running:
+  - `q` — stops the program and restores the default Mullvad configuration
+  - `a` — skips ahead to the next rotation immediately, without waiting
+- Logs every rotation to a file (`~/mullvad_ip_toggle.log`).
 
-## Requisitos
+## Requirements
 
-- Linux (testado em Linux Mint / Ubuntu).
-- [Mullvad VPN](https://mullvad.net/pt/download) instalada, com o CLI
-  `mullvad` disponível no `PATH`.
-- `curl` (opcional, para a verificação do IP público).
-- `notify-send` (opcional, para notificações desktop — já vem por
-  omissão na maioria das distribuições com ambiente gráfico).
+- Linux (tested on Linux Mint / Ubuntu).
+- [Mullvad VPN](https://mullvad.net/en/download) installed, with the
+  `mullvad` CLI available in your `PATH`.
+- `curl` (optional, for the public IP check).
+- `notify-send` (optional, for desktop notifications — usually already
+  installed on most desktop Linux distributions).
 
-## Instalação
+## Installation
 
-Corre este comando num terminal:
+Run this command in a terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mikewalker86/mullvad-ip-toggle/main/install.sh | bash
 ```
 
-Isto vai:
+This will:
 
-1. Descarregar o script para `~/.local/bin/mullvad-ip-toggle`.
-2. Criar um atalho no menu de aplicações (e, se existir, na pasta do
-   Ambiente de Trabalho).
+1. Download the script to `~/.local/bin/mullvad-ip-toggle`.
+2. Create an entry in your applications menu (and, if it exists, a
+   shortcut on your Desktop folder).
 
-Se `~/.local/bin` ainda não estiver no teu `PATH`, o instalador avisa-te
-e diz exatamente o que adicionar ao teu `~/.bashrc`.
+If `~/.local/bin` isn't already in your `PATH`, the installer will warn
+you and tell you exactly what to add to your `~/.bashrc`.
 
-## Como usar
+## Usage
 
-Depois de instalado, corre num terminal:
+Once installed, run in a terminal:
 
 ```bash
 mullvad-ip-toggle
 ```
 
-Ou procura por **"Mullvad IP Toggle"** no menu de aplicações, ou faz
-duplo clique no ícone do Ambiente de Trabalho (se foi criado).
+Or search for **"Mullvad IP Toggle"** in your applications menu, or
+double-click the Desktop icon (if one was created).
 
-O programa vai perguntar:
+The program will ask:
 
-1. Qual(is) região(ões) alternar (podes combinar várias, ex: `1 3`).
-2. Qual o intervalo entre rotações.
+1. Which region(s) to rotate through (you can combine several, e.g. `1 3`).
+2. The interval between rotations.
 
-Depois disso, começa a rodar automaticamente. Durante a execução:
-- pressiona `a` para avançar já para a próxima localização;
-- pressiona `q` para parar e restaurar a configuração da Mullvad.
+After that, it starts rotating automatically. While it's running:
+- press `a` to skip ahead to the next location right away;
+- press `q` to stop and restore the default Mullvad configuration.
 
-## Desinstalar
+## Uninstall
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mikewalker86/mullvad-ip-toggle/main/uninstall.sh | bash
 ```
 
-O ficheiro de configuração (`~/.mullvad_ip_toggle.conf`) e o log
-(`~/mullvad_ip_toggle.log`) não são apagados automaticamente.
+The configuration file (`~/.mullvad_ip_toggle.conf`) and the log
+(`~/mullvad_ip_toggle.log`) are not removed automatically.
 
-## Aviso
+## Disclaimer
 
-Este projeto não é afiliado, endossado ou associado à Mullvad AB.
-"Mullvad" é marca registada da Mullvad VPN AB. Este script apenas
-automatiza chamadas ao CLI oficial `mullvad`, que tem de estar
-instalado separadamente.
+This project is not affiliated with, endorsed by, or associated with
+Mullvad AB. "Mullvad" is a registered trademark of Mullvad VPN AB. This
+script only automates calls to the official `mullvad` CLI, which must
+be installed separately.
 
-## Licença
+## License
 
-MIT — ver [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
