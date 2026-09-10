@@ -363,7 +363,11 @@ wait_with_exit(){
 wait_for_reconnection() {
     local elapsed=0
     local result
-    while [ "$elapsed" -lt "$HANDSHAKE_TIMEOUT" ]; do
+    # Polls every 0.5s, so the loop must run twice per second to make
+    # HANDSHAKE_TIMEOUT actually mean seconds (it was previously running
+    # for only half of the configured timeout).
+    local max_polls=$((HANDSHAKE_TIMEOUT * 2))
+    while [ "$elapsed" -lt "$max_polls" ]; do
         if mullvad status 2>/dev/null | grep -qi "connected"; then
             return 0
         fi
