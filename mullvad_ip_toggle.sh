@@ -3,16 +3,19 @@
 # Mullvad IP Toggle - automatic Mullvad VPN location/IP rotation
 #
 # Features:
+#   - Main menu: Start / Settings / Exit
 #   - Choose which region(s) to rotate through: European Union / United
 #     States / Brazil - regions can be combined into a single pool
-#   - Choose the rotation interval: 25s, 35s, 45s, 60s, 120s
+#   - Choose the rotation interval: 25s, 35s, 45s, 60s, 120s, or a custom
+#     value in seconds (set in Settings)
+#   - Settings: hide public IP, clean screen mode, custom rotation time,
+#     enable/disable the log file
 #   - Saves your last configuration and offers to reuse it
 #   - "Smart" reconnection that waits for the real handshake instead of a
 #     fixed delay, minimizing connection downtime
 #   - Automatic retry if the handshake fails
 #   - Optional public IP check on every rotation (requires curl)
 #   - Desktop notification on every location change (requires notify-send)
-#   - Logs every rotation to a file
 #   - Full country/city names instead of codes
 #   - Updates the terminal window title (visible in the taskbar)
 #   - Keyboard control: 'q' quits, 'a' skips ahead to the next rotation
@@ -63,9 +66,7 @@ declare -A CITY_NAME=(
 )
 
 # Human-readable description of a location code. Automatically detects
-# whether it's "country only" (one word, e.g. EU) or "country city"
-# (two words, e.g. US/Brazil), which allows combining different regions
-# in the same pool without confusion.
+# whether it's "country only" or "country city".
 describe_location() {
     local code="$1"
     if [[ "$code" == *" "* ]]; then
@@ -77,9 +78,7 @@ describe_location() {
     fi
 }
 
-# ---------------------------------------------------------------------------
 # Builds the location pool from a list of options (1, 2, 3)
-# ---------------------------------------------------------------------------
 build_locations() {
     local options="$1"
     LOCATIONS=()
@@ -93,8 +92,7 @@ build_locations() {
     done
 }
 
-# Joins the selected region names with " + " (IFS only uses a single
-# character, so it can't be used directly with a 3-character separator)
+# Joins the selected region names with " + "
 join_region_names() {
     local result=""
     local name
@@ -109,24 +107,167 @@ join_region_names() {
 }
 
 # ---------------------------------------------------------------------------
-# Configuration: load/save the last choice
+# Load saved configuration (region, interval, and settings)
 # ---------------------------------------------------------------------------
-REGION_OPTION=""
+LAST_REGION=""
+LAST_INTERVAL=""
+HIDE_PUBLIC_IP="no"
+CLEAN_SCREEN="no"
+ENABLE_LOG="yes"
+CUSTOM_INTERVAL=""
 
 if [ -f "$CONFIG_FILE" ]; then
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
 fi
 
+# ---------------------------------------------------------------------------
+# Saves all persisted settings and the last used region/interval
+# ---------------------------------------------------------------------------
+save_config() {
+    {
+        echo "LAST_REGION=\"$LAST_REGION\""
+        echo "LAST_INTERVAL=\"$LAST_INTERVAL\""
+        echo "HIDE_PUBLIC_IP=\"$HIDE_PUBLIC_IP\""
+        echo "CLEAN_SCREEN=\"$CLEAN_SCREEN\""
+        echo "ENABLE_LOG=\"$ENABLE_LOG\""
+        echo "CUSTOM_INTERVAL=\"$CUSTOM_INTERVAL\""
+    } > "$CONFIG_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# Appends a line to the log file, only if logging is enabled
+# ---------------------------------------------------------------------------
+log_line() {
+    if [ "$ENABLE_LOG" = "yes" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Partially masks a public IP address with asterisks
+# ---------------------------------------------------------------------------
+mask_ip() {
+    local ip="$1"
+    if [[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.***.***"
+    else
+        # Fallback for IPv6 or unexpected formats: keep the first few
+        # characters visible and mask the rest.
+        echo "${ip:0:6}***"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Shows the Mullvad connection status, optionally trimmed down
+# (Clean Screen setting removes the Features / Tunnel interface / Relay lines)
+# ---------------------------------------------------------------------------
+show_status() {
+    local output
+    output=$(mullvad status -v)
+    if [ "$CLEAN_SCREEN" = "yes" ]; then
+        echo "$output" | grep -viE "features|tunnel interface|relay"
+    else
+        echo "$output"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Settings menu
+# ---------------------------------------------------------------------------
+yes_no_label() {
+    [ "$1" = "yes" ] && echo "Yes" || echo "No"
+}
+
+settings_menu() {
+    while true; do
+        echo ""
+        echo "========================================="
+        echo "   SETTINGS"
+        echo "========================================="
+        echo "  1) Hide Public IP        [$(yes_no_label "$HIDE_PUBLIC_IP")]"
+        echo "  2) Clean Screen          [$(yes_no_label "$CLEAN_SCREEN")]"
+        if [ -n "$CUSTOM_INTERVAL" ]; then
+            echo "  3) Custom Rotation Time  [${CUSTOM_INTERVAL}s]"
+        else
+            echo "  3) Custom Rotation Time  [Not set]"
+        fi
+        echo "  4) Log File              [$([ "$ENABLE_LOG" = "yes" ] && echo Enabled || echo Disabled)]"
+        echo "  5) Back to main menu"
+        echo "-----------------------------------------"
+        read -rp "Option [1-5]: " setting_choice
+
+        case "$setting_choice" in
+            1)
+                if [ "$HIDE_PUBLIC_IP" = "yes" ]; then HIDE_PUBLIC_IP="no"; else HIDE_PUBLIC_IP="yes"; fi
+                save_config
+                ;;
+            2)
+                if [ "$CLEAN_SCREEN" = "yes" ]; then CLEAN_SCREEN="no"; else CLEAN_SCREEN="yes"; fi
+                save_config
+                ;;
+            3)
+                read -rp "Enter rotation time in seconds (0 to clear/unset): " custom_value
+                if [[ "$custom_value" =~ ^[0-9]+$ ]] && [ "$custom_value" -gt 0 ]; then
+                    CUSTOM_INTERVAL="$custom_value"
+                    echo "Custom rotation time set to ${CUSTOM_INTERVAL}s."
+                else
+                    CUSTOM_INTERVAL=""
+                    echo "Custom rotation time cleared. The preset menu will be used instead."
+                fi
+                save_config
+                ;;
+            4)
+                if [ "$ENABLE_LOG" = "yes" ]; then ENABLE_LOG="no"; else ENABLE_LOG="yes"; fi
+                save_config
+                ;;
+            5)
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                ;;
+        esac
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Main menu
+# ---------------------------------------------------------------------------
+echo "========================================="
+echo "        MULLVAD IP TOGGLE"
+echo "========================================="
+
+while true; do
+    echo ""
+    echo "  1) Start"
+    echo "  2) Settings"
+    echo "  3) Exit"
+    echo "-----------------------------------------"
+    read -rp "Option [1-3]: " main_choice
+
+    case "$main_choice" in
+        1) break ;;
+        2) settings_menu ;;
+        3) exit 0 ;;
+        *) echo "Invalid option." ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Region and interval selection
+# ---------------------------------------------------------------------------
+REGION_OPTION=""
 use_saved_config=0
+
 if [ -n "$LAST_REGION" ] && [ -n "$LAST_INTERVAL" ]; then
     build_locations "$LAST_REGION"
-    echo "========================================="
-    echo "        MULLVAD IP TOGGLE"
-    echo "========================================="
+    displayed_interval="$LAST_INTERVAL"
+    [ -n "$CUSTOM_INTERVAL" ] && displayed_interval="$CUSTOM_INTERVAL (custom)"
+    echo ""
     echo "Last saved configuration:"
     printf '  Region(s): %s\n' "$(join_region_names)"
-    echo "  Interval: ${LAST_INTERVAL}s"
+    echo "  Interval: ${displayed_interval}s"
     echo "-----------------------------------------"
     read -rp "Use this configuration? [Y/n]: " answer
     case "$answer" in
@@ -137,15 +278,14 @@ fi
 
 if [ "$use_saved_config" -eq 1 ]; then
     REGION_OPTION="$LAST_REGION"
-    INTERVAL="$LAST_INTERVAL"
+    if [ -n "$CUSTOM_INTERVAL" ]; then
+        INTERVAL="$CUSTOM_INTERVAL"
+    else
+        INTERVAL="$LAST_INTERVAL"
+    fi
     REGION_NAME=$(join_region_names)
 else
-    # -----------------------------------------------------------------------
-    # Interactive menu
-    # -----------------------------------------------------------------------
-    echo "========================================="
-    echo "        MULLVAD IP TOGGLE"
-    echo "========================================="
+    echo ""
     echo "Choose the region(s) to rotate through:"
     echo "  1) European Union"
     echo "  2) United States (different cities)"
@@ -162,33 +302,37 @@ else
     fi
     REGION_NAME=$(join_region_names)
 
-    echo ""
-    echo "Choose the interval between rotations:"
-    echo "  1) 25 seconds"
-    echo "  2) 35 seconds"
-    echo "  3) 45 seconds"
-    echo "  4) 60 seconds"
-    echo "  5) 120 seconds"
-    echo "-----------------------------------------"
-    read -rp "Option [1-5]: " time_option
+    if [ -n "$CUSTOM_INTERVAL" ]; then
+        INTERVAL="$CUSTOM_INTERVAL"
+        echo ""
+        echo "Using the custom rotation time from Settings: ${INTERVAL}s"
+    else
+        echo ""
+        echo "Choose the interval between rotations:"
+        echo "  1) 25 seconds"
+        echo "  2) 35 seconds"
+        echo "  3) 45 seconds"
+        echo "  4) 60 seconds"
+        echo "  5) 120 seconds"
+        echo "-----------------------------------------"
+        read -rp "Option [1-5]: " time_option
 
-    case "$time_option" in
-        1) INTERVAL=25 ;;
-        2) INTERVAL=35 ;;
-        3) INTERVAL=45 ;;
-        4) INTERVAL=60 ;;
-        5) INTERVAL=120 ;;
-        *)
-            echo "Invalid option. Exiting."
-            exit 1
-            ;;
-    esac
+        case "$time_option" in
+            1) INTERVAL=25 ;;
+            2) INTERVAL=35 ;;
+            3) INTERVAL=45 ;;
+            4) INTERVAL=60 ;;
+            5) INTERVAL=120 ;;
+            *)
+                echo "Invalid option. Exiting."
+                exit 1
+                ;;
+        esac
+    fi
 
-    # Save this choice for next time
-    {
-        echo "LAST_REGION=\"$REGION_OPTION\""
-        echo "LAST_INTERVAL=\"$INTERVAL\""
-    } > "$CONFIG_FILE"
+    LAST_REGION="$REGION_OPTION"
+    LAST_INTERVAL="$INTERVAL"
+    save_config
 fi
 
 # Maximum time to wait for the handshake (should not exceed the interval)
@@ -197,12 +341,9 @@ HANDSHAKE_TIMEOUT=15
 MAX_RECONNECT_ATTEMPTS=2
 
 # ---------------------------------------------------------------------------
-# Waits N seconds, but checks at every instant whether the user pressed
-# a key:
-#   'q' -> quit (this replaces CTRL+C, which on some systems is remapped
-#          to the "copy" shortcut and never reaches the script as a signal)
-#   'a' -> skip ahead to the next rotation right away, without waiting
-# Returns: 0 = time elapsed normally | 1 = quit | 2 = skip ahead
+# Waits N seconds, but checks for a keypress:
+#   'q' -> quit | 'a' -> skip ahead
+# Returns: 0 = time elapsed | 1 = quit | 2 = skip ahead
 # ---------------------------------------------------------------------------
 wait_with_exit(){
     local duration="$1"
@@ -283,7 +424,7 @@ cleanup() {
     echo "[Mullvad] Restoring default configuration (any)..."
     mullvad relay set location any > /dev/null 2>&1
     echo "[Mullvad] Rotation stopped. Bye!"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rotation stopped by the user." >> "$LOG_FILE"
+    log_line "Rotation stopped by the user."
     exit 0
 }
 trap cleanup SIGINT SIGTERM
@@ -296,7 +437,7 @@ echo "========================================="
 echo "   MULLVAD IP TOGGLE STARTED"
 echo "   Region(s): $REGION_NAME"
 echo "   Interval: ${INTERVAL}s"
-echo "   Log: $LOG_FILE"
+echo "   Log: $([ "$ENABLE_LOG" = "yes" ] && echo "$LOG_FILE" || echo "disabled")"
 echo "   'q' to quit | 'a' to skip ahead to the next rotation"
 if [ "$HAS_NOTIFY" -eq 0 ]; then
     echo "   (notify-send not found - desktop notifications disabled)"
@@ -305,7 +446,7 @@ if [ "$HAS_CURL" -eq 0 ]; then
     echo "   (curl not found - public IP check disabled)"
 fi
 echo "========================================="
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rotation started - Region(s): $REGION_NAME, Interval: ${INTERVAL}s" >> "$LOG_FILE"
+log_line "Rotation started - Region(s): $REGION_NAME, Interval: ${INTERVAL}s"
 echo -ne "\033]0;Mullvad: starting...\007"
 
 while true; do
@@ -315,33 +456,28 @@ while true; do
     echo -e "\n========================================="
     echo "[Mullvad] Switching location to: $location_description"
 
-    # Updates the terminal window title (shown in the Cinnamon taskbar)
     echo -ne "\033]0;Mullvad: ${location_description}\007"
 
-    # Deliberately unquoted: if chosen_location is "us nyc", it should
-    # split into two separate arguments (country and city). For the EU,
-    # a single word, the behavior stays the same.
     mullvad relay set location $chosen_location > /dev/null 2>&1
 
     reconnect_with_retries
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Location changed to: $chosen_location" >> "$LOG_FILE"
+    log_line "Location changed to: $chosen_location"
 
-    # "--location" has been deprecated; "-v" (verbose) shows the visible location
-    mullvad status -v
+    show_status
 
-    # Optional public IP check
     if [ "$HAS_CURL" -eq 1 ]; then
         current_ip=$(curl -s --max-time 5 https://ifconfig.me 2>/dev/null)
         if [ -n "$current_ip" ]; then
-            echo "[Mullvad] Current public IP: $current_ip"
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Public IP: $current_ip" >> "$LOG_FILE"
+            display_ip="$current_ip"
+            [ "$HIDE_PUBLIC_IP" = "yes" ] && display_ip=$(mask_ip "$current_ip")
+            echo "[Mullvad] Current public IP: $display_ip"
+            log_line "Public IP: $display_ip"
         else
             echo "[Mullvad] Could not confirm the public IP (no response)."
         fi
     fi
 
-    # Optional desktop notification
     if [ "$HAS_NOTIFY" -eq 1 ]; then
         notify-send -t 4000 "Mullvad IP Toggle" "Location changed to: $location_description" 2>/dev/null
     fi
