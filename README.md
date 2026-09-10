@@ -87,6 +87,8 @@ be installed separately.
 
 ## Changelog
 
+- **2026-09-10** — Added a Settings menu: hide public IP, clean screen
+  mode, custom rotation time, and a log file on/off toggle.
 - **2026-09-10** — Fixed `wait_for_reconnection()` waiting only about
   half of the configured `HANDSHAKE_TIMEOUT` before giving up on the
   handshake and retrying.
