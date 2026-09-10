@@ -85,6 +85,12 @@ Mullvad AB. "Mullvad" is a registered trademark of Mullvad VPN AB. This
 script only automates calls to the official `mullvad` CLI, which must
 be installed separately.
 
+## Changelog
+
+- **2026-09-10** — Fixed `wait_for_reconnection()` waiting only about
+  half of the configured `HANDSHAKE_TIMEOUT` before giving up on the
+  handshake and retrying.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
